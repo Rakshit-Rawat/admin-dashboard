@@ -1,16 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { toast } from 'sonner';
 import PostsTable from '@/components/dashboard/posts-table';
 import SearchFilter from '@/components/dashboard/search-filter';
 import { filterPosts } from '@/lib/api';
-import { Post } from '@/types';
+import { Post, User } from '@/types';
 import LoadingSpinner from '@/components/ui/loading-spinner';
 
 interface DashboardClientProps {
   initialPosts: Post[];
+}
+
+// Extended user interface to include role which is used in the component
+interface ExtendedUser extends User {
+  role?: string;
 }
 
 export default function DashboardClient({ initialPosts }: DashboardClientProps) {
@@ -18,8 +23,8 @@ export default function DashboardClient({ initialPosts }: DashboardClientProps) 
   const pathname = usePathname();
   const searchParams = useSearchParams();
   
-  const [userData, setUserData] = useState<any>(null);
-  const [posts] = useState<Post[]>(initialPosts); 
+  const [userData, setUserData] = useState<ExtendedUser | null>(null);
+  const [posts] = useState<Post[]>(initialPosts);
   const [filteredPosts, setFilteredPosts] = useState<Post[]>(initialPosts);
   const [isLoading, setIsLoading] = useState(true);
   
@@ -27,20 +32,26 @@ export default function DashboardClient({ initialPosts }: DashboardClientProps) 
   const searchTerm = searchParams.get('search') || '';
   const searchField = (searchParams.get('field') as 'all' | 'id' | 'title') || 'all';
   
+  // Define handleLogout as useCallback to avoid dependency issues
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    toast.success('Logged out successfully');
+    router.push('/');
+  }, [router]);
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     
     if (!token) {
-      router.push('/'); 
+      router.push('/');
       return;
     }
     
-    
     try {
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const user = JSON.parse(localStorage.getItem('user') || '{}') as ExtendedUser;
       setUserData(user);
       
-  
       const minLoadingTime = 1000;
       const loadingTimer = setTimeout(() => {
         setIsLoading(false);
@@ -53,7 +64,7 @@ export default function DashboardClient({ initialPosts }: DashboardClientProps) 
       console.error('Error loading user data:', error);
       handleLogout();
     }
-  }, [router]);
+  }, [router, handleLogout]);
   
   // Update filtered posts when search params change
   useEffect(() => {
@@ -89,13 +100,6 @@ export default function DashboardClient({ initialPosts }: DashboardClientProps) 
     }, 600);
   };
   
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    toast.success('Logged out successfully');
-    router.push('/');
-  };
-  
   if (isLoading || !userData) {
     return <LoadingSpinner />;
   }
@@ -113,8 +117,8 @@ export default function DashboardClient({ initialPosts }: DashboardClientProps) 
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <h3 className="text-xl font-semibold">Recent Posts</h3>
           <div className="w-full sm:w-auto">
-            <SearchFilter 
-              onSearch={handleSearch} 
+            <SearchFilter
+              onSearch={handleSearch}
               initialValue={searchTerm}
               initialField={searchField}
             />
